@@ -1,3 +1,4 @@
+import pandas as pd
 from neo4j import GraphDatabase
 import numpy as np
 import datetime
@@ -150,18 +151,17 @@ def main():
 
     app = App(uri, user, password)
     app.load_data(src_uri, src_user, src_password)
-    print('Copied', datetime.datetime.now() - starttime)
+    print(datetime.datetime.now() - starttime)
     app.new_graph(['100203',  # Монтаж планка натягивающая
                    '171670',  # Монтаж трос стен вi-l дл.5986 серьга вверху
                    '192057',  # Монтаж алюминиевая направляющая для пола bi-level ii-уровень
                    '111281',  # Монтаж балка несущая вi-l5м дл.
-                   '161564',  # Монтаж панель стеклянная
-                   '165160'   # Монтаж дверь двухстворчатая e6/ev1 din 17611
+                   '161564'  # Монтаж панель стеклянная
                    ])
-    print('Created new graph by removing nodes', datetime.datetime.now() - starttime)
+    print(datetime.datetime.now() - starttime)
     app.result_to_excel()
     app.close()
-    print('Created result table', datetime.datetime.now() - starttime)
+    print(datetime.datetime.now() - starttime)
 
 
 if __name__ == "__main__":
