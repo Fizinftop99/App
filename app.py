@@ -1,4 +1,3 @@
-import pandas as pd
 from neo4j import GraphDatabase
 import numpy as np
 import datetime
@@ -33,7 +32,7 @@ class App:
         n_name_arr = np.array([r['n']['name'] for r in result])
         m_name_arr = np.array([r['m']['name'] for r in result])
         with self.driver.session() as session:
-            session.run("MATCH (n) DETACH DELETE n")
+            session.run("MATCH (n) DETACH DELETE n")  # Очистка
             for n_id, n_name, m_id, m_name in zip(n_id_arr, n_name_arr, m_id_arr, m_name_arr):
                 session.run(q_create,
                             n_id=n_id,
@@ -85,7 +84,6 @@ class App:
 
     def new_graph(self, target_ids: list):
         for element in self.get_all_id():
-            print(element)
             if element not in target_ids:
                 self.removing_node(element)
 
@@ -116,27 +114,29 @@ class App:
         workbook = xlsxwriter.Workbook('result.xlsx')
         worksheet = workbook.add_worksheet()
         worksheet.write(0, 0, 'Идентификатор операции')
+        worksheet.set_column(0, 0, 25)
         worksheet.write(0, 1, 'Название операции')
+        worksheet.set_column(1, 1, 75)
         worksheet.write(0, 2, 'Предшественники')
         worksheet.write(0, 3, 'Последователи')
+        worksheet.set_column(2, 3, 30)
         row = 1
         for i in self.get_all_id():
-            print(i)
             worksheet.write(row, 0, i)
             worksheet.write(row, 1, names[i])
             try:
-                worksheet.write(row, 2, str(preds[i]))
+                worksheet.write(row, 2, ', '.join(preds[i]))
             except KeyError:
                 worksheet.write(row, 2, '')
             try:
-                worksheet.write(row, 3, str(flws[i]))
+                worksheet.write(row, 3, ', '.join(flws[i]))
             except KeyError:
                 worksheet.write(row, 3, '')
             row += 1
         workbook.close()
 
 
-if __name__ == "__main__":
+def main():
     starttime = datetime.datetime.now()
     src_uri = "neo4j+s://174cd36c.databases.neo4j.io"
     src_user = "neo4j"
@@ -150,14 +150,19 @@ if __name__ == "__main__":
 
     app = App(uri, user, password)
     app.load_data(src_uri, src_user, src_password)
-    print(datetime.datetime.now() - starttime)
-    app.new_graph(['R1870',  # Подъем каркаса
-                   'R1040',  # Каркас установлен
-                   'R1000',  # Договор заключен
-                   'R1080',  # Разработка Проектной документации
-                   'R1190'  # Установка опорных плит
+    print('Copied', datetime.datetime.now() - starttime)
+    app.new_graph(['100203',  # Монтаж планка натягивающая
+                   '171670',  # Монтаж трос стен вi-l дл.5986 серьга вверху
+                   '192057',  # Монтаж алюминиевая направляющая для пола bi-level ii-уровень
+                   '111281',  # Монтаж балка несущая вi-l5м дл.
+                   '161564',  # Монтаж панель стеклянная
+                   '165160'   # Монтаж дверь двухстворчатая e6/ev1 din 17611
                    ])
-    print(datetime.datetime.now() - starttime)
+    print('Created new graph by removing nodes', datetime.datetime.now() - starttime)
     app.result_to_excel()
     app.close()
-    print(datetime.datetime.now() - starttime)
+    print('Created result table', datetime.datetime.now() - starttime)
+
+
+if __name__ == "__main__":
+    main()
