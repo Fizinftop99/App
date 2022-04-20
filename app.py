@@ -136,6 +136,13 @@ class App:
             row += 1
         workbook.close()
 
+    def del_extra_rel(self):
+        q_delete = '''
+            match (b)<-[r]-(a)-->(c)-->(b)
+            delete r
+            '''
+        self.driver.session().run(q_delete)
+
 
 def main():
     starttime = datetime.datetime.now()
@@ -151,14 +158,16 @@ def main():
 
     app = App(uri, user, password)
     app.load_data(src_uri, src_user, src_password)
-    print(datetime.datetime.now() - starttime)
+    print('data loaded', datetime.datetime.now() - starttime)
     app.new_graph(['100203',  # Монтаж планка натягивающая
                    '171670',  # Монтаж трос стен вi-l дл.5986 серьга вверху
                    '192057',  # Монтаж алюминиевая направляющая для пола bi-level ii-уровень
                    '111281',  # Монтаж балка несущая вi-l5м дл.
-                   '161564'  # Монтаж панель стеклянная
+                   '161564',  # Монтаж панель стеклянная
+                   '165160'  # Монтаж дверь двухстворчатая e6/ev1 din 17611
                    ])
-    print(datetime.datetime.now() - starttime)
+    print('new_graph', datetime.datetime.now() - starttime)
+    app.del_extra_rel()
     app.result_to_excel()
     app.close()
     print(datetime.datetime.now() - starttime)

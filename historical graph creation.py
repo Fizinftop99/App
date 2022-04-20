@@ -53,8 +53,8 @@ def main():  # Проверяй базу данных atabase=
     src_uri = "neo4j+s://174cd36c.databases.neo4j.io"
     src_user = "neo4j"
     src_pswd = "w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU"
-    # driver = GraphDatabase.driver(src_uri, auth=(src_user, src_pswd))
-    driver = GraphDatabase.driver("neo4j://20.107.79.39:7687", auth=("neo4j", "Accelerati0n"))
+    driver = GraphDatabase.driver(src_uri, auth=(src_user, src_pswd))
+    # driver = GraphDatabase.driver("neo4j://20.107.79.39:7687", auth=("neo4j", "Accelerati0n"))
     with driver.session() as session:
         session.write_transaction(clear_database)
         session.write_transaction(make_graph, data)
