@@ -15,32 +15,25 @@ class App:
 
     def load_data(self, remote_uri, remote_user, remote_pswd):
         q_data_obtain = '''
-                        MATCH (n)-[]->(m)
-                        RETURN n, m
-                        '''
+            MATCH (n)-[r]->(m)
+            RETURN n.name AS name1, n.id AS id1, properties(r).weight AS weight, m.name AS name2, m.id AS id2
+            '''
         q_create = '''
-                MERGE (n:Work {id: $n_id, name: $n_name}) 
-                MERGE (m:Work {id: $m_id, name: $m_name})
-                MERGE (n)-[r:FOLLOWS]->(m)
-                '''
+            LOAD CSV WITH HEADERS FROM 'file:///2.csv' AS row
+            MERGE (n:Work {id: row.id1, name: row.name1})
+            MERGE (m:Work {id: row.id2, name: row.name2})
+            CREATE (n)-[r:FOLLOWS {weight: row.weight}]->(m);
+            '''
         # obtaining data
         src_driver = GraphDatabase.driver(remote_uri, auth=(remote_user, remote_pswd))
         result = src_driver.session().run(q_data_obtain).data()
         src_driver.close()
-
-        n_id_arr = np.array([r['n']['id'] for r in result])
-        m_id_arr = np.array([r['m']['id'] for r in result])
-        n_name_arr = np.array([r['n']['name'] for r in result])
-        m_name_arr = np.array([r['m']['name'] for r in result])
+        df = pd.DataFrame(result)
+        save_path = 'C:\\Users\\Nikita\\.Neo4jDesktop\\relate-data\\dbmss\\dbms-44d5c24b-bb41-4e4b-bbeb-f18bca851f09\\import\\'
+        df.to_csv(save_path + '2.csv', index=False)
         with self.driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n")  # Очистка
-            for n_id, n_name, m_id, m_name in zip(n_id_arr, n_name_arr, m_id_arr, m_name_arr):
-                session.run(q_create,
-                            n_id=n_id,
-                            n_name=n_name,
-                            m_id=m_id,
-                            m_name=m_name
-                            )
+            session.run(q_create)
 
     def removing_node(self, id: str):
         income_data_obtain = f'''
@@ -149,28 +142,28 @@ def main():
     src_uri = "neo4j+s://174cd36c.databases.neo4j.io"
     src_user = "neo4j"
     src_password = "w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU"
-    # uri = "bolt://localhost:7687"
-    # user = "neo4j"
-    # password = "2310"
-    uri = "neo4j://20.107.79.39:7687"
+    uri = "bolt://localhost:7687"
     user = "neo4j"
-    password = "Accelerati0n"
+    password = "2310"
+    # uri = "neo4j://20.107.79.39:7687"
+    # user = "neo4j"
+    # password = "Accelerati0n"
 
     app = App(uri, user, password)
     app.load_data(src_uri, src_user, src_password)
     print('data loaded', datetime.datetime.now() - starttime)
-    app.new_graph(['100203',  # Монтаж планка натягивающая
-                   '171670',  # Монтаж трос стен вi-l дл.5986 серьга вверху
-                   '192057',  # Монтаж алюминиевая направляющая для пола bi-level ii-уровень
-                   '111281',  # Монтаж балка несущая вi-l5м дл.
-                   '161564',  # Монтаж панель стеклянная
-                   '165160'  # Монтаж дверь двухстворчатая e6/ev1 din 17611
-                   ])
-    print('new_graph', datetime.datetime.now() - starttime)
-    app.del_extra_rel()
-    app.result_to_excel()
-    app.close()
-    print(datetime.datetime.now() - starttime)
+    # app.new_graph(['100203',  # Монтаж планка натягивающая
+    #                '171670',  # Монтаж трос стен вi-l дл.5986 серьга вверху
+    #                '192057',  # Монтаж алюминиевая направляющая для пола bi-level ii-уровень
+    #                '111281',  # Монтаж балка несущая вi-l5м дл.
+    #                '161564',  # Монтаж панель стеклянная
+    #                '165160'  # Монтаж дверь двухстворчатая e6/ev1 din 17611
+    #                ])
+    # print('new_graph', datetime.datetime.now() - starttime)
+    # app.del_extra_rel()
+    # app.result_to_excel()
+    # app.close()
+    # print(datetime.datetime.now() - starttime)
 
 
 if __name__ == "__main__":
