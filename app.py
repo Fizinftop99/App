@@ -40,7 +40,7 @@ class App:
             '''
         # obtaining data
         src_driver = GraphDatabase.driver(remote_uri, auth=(remote_user, remote_pswd))
-        print('open')
+        print('data loading')
         result = src_driver.session().run(q_data_obtain).data()
         src_driver.close()
         df = pd.DataFrame(result)
@@ -157,18 +157,12 @@ class App:
         MATCH (n)-[]->(m)
         RETURN n.id AS n_id, m.id AS m_id
         '''
-        file_name = 'data/solution_schedule.xlsx'
-        schedDF = pd.read_excel(file_name, sheet_name="Состав работ", dtype=str, index_col=0)
+        file_path = 'data/solution_schedule.xlsx'
+        schedDF = pd.read_excel(file_path, sheet_name="Состав работ", dtype=str, index_col=0)
         schedDF = schedDF[['wbs2', 'vendor_code']]  # , 'name']
         schedDF['precursors'] = ''
         schedDF['followers'] = ''
         wbs2_arr = schedDF.wbs2.unique()
-
-        # checking
-        # vendors = schedDF[schedDF.wbs2 == wbs2_arr[0]].vendor_code.to_numpy()
-        # self.load_data(src_uri, src_user, src_password)
-        # self.new_graph(vendors)
-        # self.del_extra_rel()
 
         for wbs2 in reversed(wbs2_arr):
             wbs_df = schedDF[schedDF.wbs2 == wbs2]
@@ -177,29 +171,25 @@ class App:
             self.new_graph(vendors)
             self.del_extra_rel()
 
-            # Должно быть цикле
             result = self.driver.session().run(q_data_obtain).data()
             df = pd.DataFrame(result)
-            for ind, vend in enumerate(vendors):
+            for vend in vendors:
                 ind2 = wbs_df.index[wbs_df.vendor_code == vend].tolist()[0]
-                # if ind != ind2[0]:
-                #     print(ind, ind2, vend)
                 flwDF = df.loc[df.n_id == vend]
                 if not flwDF.empty:
                     flws = flwDF.m_id.to_numpy()
-                    wbs_df.at[ind2, 'followers'] = ', '.join(flws)
+                    schedDF.at[ind2, 'followers'] = ', '.join(flws)
 
                 predDF = df.loc[df.m_id == vend]
                 if not predDF.empty:
                     preds = predDF.n_id.to_numpy()
-                    wbs_df.at[ind2, 'precursors'] = ', '.join(preds)
+                    schedDF.at[ind2, 'precursors'] = ', '.join(preds)
 
-            # book = load_workbook('data/new_sched.xlsx')
-            with pd.ExcelWriter('new_sched.xlsx', engine='openpyxl', mode='a') as writer:
-                # writer.book = book
-                wbs_df.to_excel(writer, sheet_name=wbs2)
-                writer.save()
-
+        book = load_workbook(file_path)
+        with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
+            writer.book = book
+            schedDF.to_excel(writer, sheet_name="Упорядоченно")
+            writer.save()
 
 
 def main():
