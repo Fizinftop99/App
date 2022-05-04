@@ -1,5 +1,5 @@
 import pandas as pd
-from neo4j import GraphDatabase
+from neo4j import GraphDatabase, Transaction
 import numpy as np
 import datetime
 import xlsxwriter
@@ -40,7 +40,6 @@ class App:
             '''
         # obtaining data
         src_driver = GraphDatabase.driver(remote_uri, auth=(remote_user, remote_pswd))
-        print('data loading')
         result = src_driver.session().run(q_data_obtain).data()
         src_driver.close()
         df = pd.DataFrame(result)
@@ -144,6 +143,49 @@ class App:
                 worksheet.write(row, 3, '')
             row += 1
         workbook.close()
+
+    def create_link(self, tx: Transaction, parent_id, child_id):
+        tx.run("MATCH (parent) WHERE parent.id = $parent_id "
+               "MATCH (child) WHERE child.id = $child_id "
+               "MERGE (parent)-[r]->(child)",
+               parent_id=parent_id,
+               child_id=child_id)
+
+    def remove_link(self, tx: Transaction, parent_id, child_id):
+        tx.run("MATCH (parent) WHERE parent.id = $parent_id "
+               "MATCH (child) WHERE child.id = $child_id "
+               "DELETE (parent)-[r]->(child)",
+               parent_id=parent_id,
+               child_id=child_id)
+
+    def way_exist(self, parent_id, child_id):
+        query = "CALL gds.graph.project('myGraph', 'Node', 'REL')"
+        query = '''MATCH (a:Node{name:'A'}), (b:Node{name:'B'})
+                   WHERE a.id = $parent_id AND b.id = $child_id
+                   WITH id(a) AS source, [id(b)] AS targetNodes
+                   CALL gds.dfs.stream('myGraph', {
+                   sourceNode: source,
+                   targetNodes: targetNodes
+                   })
+                   YIELD path
+                   RETURN path'''
+
+    def triangle_destroyer(self, parent_id, child_id):
+        outcome_data_obtain = f'''
+                            MATCH (n)-[]->(m)
+                            WHERE n.id = $id
+                            RETURN m
+                            '''
+
+        with self.driver.session() as session:
+
+            outcoming = session.run(outcome_data_obtain, id=id).data()
+            outcoming = np.array([row['m']['id'] for row in outcoming])
+
+            for child in outcoming:
+                self.driver.session().write_transaction(self.remove_link, parent_id, child_id)
+                if not self.way_exist(parent_id, child_id):
+                    self.driver.session().write_transaction(self.create_link, parent_id, child_id)
 
     def del_extra_rel(self):
         q_delete = '''
