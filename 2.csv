@@ -1,0 +1,7 @@
+n.name,n.id,weight,m.name,m.id
+name_1,1,5,name_4,4
+name_1,1,10,name_3,3
+name_1,1,3,name_2,2
+name_2,2,3,name_6,6
+name_2,2,4,name_5,5
+name_3,3,10,name_6,6

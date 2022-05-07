@@ -20,10 +20,15 @@ def read_graph_data(file_name: str) -> pd.DataFrame:
 
 def main():
     file_name = 'data/solution_schedule.xlsx'
-    df = pd.read_excel(file_name, sheet_name="Состав работ", dtype=str, index_col=0)
-    vendors = df['vendor_code'].tolist()
-    print(vendors)
-    print(df.columns)
+    # df = pd.read_excel(file_name, sheet_name="Состав работ", dtype=str, index_col=0)
+    df = pd.read_excel(file_name, sheet_name="Состав работ")
+    df = df.drop(['Unnamed: 0'], axis=1, errors='ignore')
+    print(df.dtypes)
+    df = df.astype('str')
+    print(df.dtypes)
+    vendors = df['vendor_code'].to_numpy()
+    # print(vendors)
+    # print(df.columns)
 
 
 if __name__ == '__main__':
