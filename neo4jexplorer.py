@@ -2,9 +2,7 @@ import pandas as pd
 from neo4j import GraphDatabase, Transaction
 import numpy as np
 import datetime
-import xlsxwriter
-import os
-from openpyxl import load_workbook
+from yml import get_cfg
 
 src_uri = "neo4j+s://174cd36c.databases.neo4j.io:7687"
 src_user = "neo4j"
@@ -19,15 +17,29 @@ password = "2310"
 # src_password = "Accelerati0n"
 
 
-class App:
-    def __init__(self, uri_, user_, password_):
-        self.driver = GraphDatabase.driver(uri_, auth=(user_, password_))
+class Neo4jExplorer:
+    def __init__(self):
+        # read settings from config
+        self.cfg: dict = get_cfg("neo4j")
+        _uri = self.cfg.get('uri')
+        _user = self.cfg.get('user')
+        _pass = self.cfg.get('password')
+        # print(_uri, _user, _pass, sep='\n')
+
+        self.driver = GraphDatabase.driver(_uri, auth=(_user, _pass))
 
     def close(self):
         # Don't forget to close the driver connection when you are finished with it
         self.driver.close()
+        # print('closed')
 
-    def load_data(self, remote_uri, remote_user, remote_pswd):
+    def load_data(self):
+        # driver to historical database
+        _hist_uri = self.cfg.get('src_uri')
+        _hist_user = self.cfg.get('src_user')
+        _hist_pass = self.cfg.get('src_password')
+        _hist_driver = GraphDatabase.driver(_hist_uri, auth=(_hist_user, _hist_pass))
+
         q_data_obtain = '''
             MATCH (n)-[r]->(m)
             RETURN n.name AS n_name, n.id AS n_id, properties(r).weight AS weight, m.name AS m_name, m.id AS m_id
@@ -38,10 +50,11 @@ class App:
             MERGE (m:Work {id: row.m_id, name: row.m_name})
             CREATE (n)-[r:FOLLOWS {weight: row.weight}]->(m);
             '''
+
         # obtaining data
-        src_driver = GraphDatabase.driver(remote_uri, auth=(remote_user, remote_pswd))
-        result = src_driver.session().run(q_data_obtain).data()
-        src_driver.close()
+        result = _hist_driver.session().run(q_data_obtain).data()
+        _hist_driver.close()
+
         df = pd.DataFrame(result)
         save_path = 'C:\\Users\\Nikita\\.Neo4jDesktop\\relate-data\\dbmss\\dbms-44d5c24b-bb41-4e4b-bbeb-f18bca851f09' \
                     '\\import\\'
@@ -96,54 +109,6 @@ class App:
             if element not in target_ids:
                 self.removing_node(element)
 
-    def result_to_excel(self):
-        q_data_obtain = '''
-                        MATCH (n)-[]->(m)
-                        RETURN n, m
-                        '''
-        result = self.driver.session().run(q_data_obtain).data()
-        n_id_arr = np.array([r['n']['id'] for r in result])
-        m_id_arr = np.array([r['m']['id'] for r in result])
-        n_name_arr = np.array([r['n']['name'] for r in result])
-        m_name_arr = np.array([r['m']['name'] for r in result])
-        preds = dict()
-        flws = dict()
-        names = dict()
-        for n_id, n_name, m_id, m_name in zip(n_id_arr, n_name_arr, m_id_arr, m_name_arr):
-            names[n_id] = n_name
-            names[m_id] = m_name
-            try:
-                flws[n_id].add(m_id)
-            except KeyError:
-                flws[n_id] = {m_id}
-            try:
-                preds[m_id].add(n_id)
-            except KeyError:
-                preds[m_id] = {n_id}
-        workbook = xlsxwriter.Workbook('result.xlsx')
-        worksheet = workbook.add_worksheet()
-        worksheet.write(0, 0, 'Идентификатор операции')
-        worksheet.set_column(0, 0, 25)
-        worksheet.write(0, 1, 'Название операции')
-        worksheet.set_column(1, 1, 75)
-        worksheet.write(0, 2, 'Предшественники')
-        worksheet.write(0, 3, 'Последователи')
-        worksheet.set_column(2, 3, 30)
-        row = 1
-        for i in self.get_all_id():
-            worksheet.write(row, 0, i)
-            worksheet.write(row, 1, names[i])
-            try:
-                worksheet.write(row, 2, ', '.join(preds[i]))
-            except KeyError:
-                worksheet.write(row, 2, '')
-            try:
-                worksheet.write(row, 3, ', '.join(flws[i]))
-            except KeyError:
-                worksheet.write(row, 3, '')
-            row += 1
-        workbook.close()
-
     def create_link(self, tx: Transaction, parent_id, child_id):
         tx.run("MATCH (parent) WHERE parent.id = $parent_id "
                "MATCH (child) WHERE child.id = $child_id "
@@ -194,22 +159,21 @@ class App:
             '''
         self.driver.session().run(q_delete)
 
-    def ordering(self, filename):
+    def ordering(self, schedDF: pd.DataFrame):
         q_data_obtain = '''
         MATCH (n)-[]->(m)
         RETURN n.id AS n_id, m.id AS m_id
         '''
-        file_path = 'data/solution_schedule.xlsx'
-        schedDF = pd.read_excel(file_path, sheet_name="Состав работ", dtype=str, index_col=0)
-        schedDF = schedDF[['wbs2', 'vendor_code']]  # , 'name']
+        schedDF.drop(['Unnamed: 0'], axis=1, errors='ignore', inplace=True)
+        schedDF = schedDF.astype('str')
         schedDF['precursors'] = ''
         schedDF['followers'] = ''
         wbs2_arr = schedDF.wbs2.unique()
 
-        for wbs2 in reversed(wbs2_arr):
-            wbs_df = schedDF[schedDF.wbs2 == wbs2]
+        for i_wbs2 in wbs2_arr:
+            wbs_df = schedDF[schedDF.wbs2 == i_wbs2]
             vendors = wbs_df.vendor_code.to_numpy()
-            self.load_data(src_uri, src_user, src_password)
+            self.load_data()
             self.new_graph(vendors)
             self.del_extra_rel()
 
@@ -227,31 +191,22 @@ class App:
                     preds = predDF.n_id.to_numpy()
                     schedDF.at[ind2, 'precursors'] = ', '.join(preds)
 
-        book = load_workbook(file_path)
-        with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
-            writer.book = book
-            schedDF.to_excel(writer, sheet_name="Упорядоченно")
-            writer.save()
+        return schedDF
 
 
 def main():
-    starttime = datetime.datetime.now()
-    app = App(uri, user, password)
-    # app.load_data(src_uri, src_user, src_password)
-    app.ordering('data/solution_schedule.xlsx')
-    print('data loaded', datetime.datetime.now() - starttime)
-    # app.new_graph(['100203',  # Монтаж планка натягивающая
-    #                '171670',  # Монтаж трос стен вi-l дл.5986 серьга вверху
-    #                '192057',  # Монтаж алюминиевая направляющая для пола bi-level ii-уровень
-    #                '111281',  # Монтаж балка несущая вi-l5м дл.
-    #                '161564',  # Монтаж панель стеклянная
-    #                '165160'  # Монтаж дверь двухстворчатая e6/ev1 din 17611
-    #                ])
-    # print('new_graph', datetime.datetime.now() - starttime)
-    # app.del_extra_rel()
-    # app.result_to_excel()
-    # app.close()
-    # print(datetime.datetime.now() - starttime)
+    # starttime = datetime.datetime.now()
+    #
+    # file_path = 'data/solution_schedule.xlsx'
+    # schedDF = pd.read_excel(file_path, sheet_name="Состав работ", dtype=str, index_col=0)
+
+    app = Neo4jExplorer()
+    # resultDF = app.ordering(schedDF)
+    app.close()
+    #
+    # with pd.ExcelWriter('data/result.xlsx', engine='openpyxl') as writer:
+    #     resultDF.to_excel(writer, sheet_name="Упорядоченно")
+    # print('data ordered', datetime.datetime.now() - starttime)
 
 
 if __name__ == "__main__":
