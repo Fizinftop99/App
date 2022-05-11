@@ -1,11 +1,12 @@
 neo4j:
-  uri: bolt://localhost:7687
-  user: neo4j
-  password: 2310
+  uri: 'neo4j://20.107.79.39:7687'
+  user: 'neo4j'
+  password: 'Accelerati0n'
   # historical database
-  src_uri: neo4j+s://174cd36c.databases.neo4j.io:7687
-  src_user: neo4j
-  src_password: w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU
+  src_uri: 'neo4j+s://174cd36c.databases.neo4j.io:7687'
+  src_user: 'neo4j'
+  src_password: 'w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU'
+  hist_link: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTCt4kOwcjG9fF95DGOYgMz6_xNILBvWQGoG6HNcOCTL0rHt-ejYtCxXVZfQhxoGCWHoMr07yzidHOg/pub?output=csv'
 
 
 api: # FastAPI params

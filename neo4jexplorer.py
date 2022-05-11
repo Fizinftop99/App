@@ -4,18 +4,6 @@ import numpy as np
 import datetime
 from yml import get_cfg
 
-src_uri = "neo4j+s://174cd36c.databases.neo4j.io:7687"
-src_user = "neo4j"
-src_password = "w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU"
-uri = "bolt://localhost:7687"
-user = "neo4j"
-password = "2310"
-
-
-# src_uri = "neo4j://20.107.79.39:7687"
-# src_user = "neo4j"
-# src_password = "Accelerati0n"
-
 
 class Neo4jExplorer:
     def __init__(self):
@@ -24,16 +12,13 @@ class Neo4jExplorer:
         _uri = self.cfg.get('uri')
         _user = self.cfg.get('user')
         _pass = self.cfg.get('password')
-        # print(_uri, _user, _pass, sep='\n')
-
         self.driver = GraphDatabase.driver(_uri, auth=(_user, _pass))
 
     def close(self):
         # Don't forget to close the driver connection when you are finished with it
         self.driver.close()
-        # print('closed')
 
-    def load_data(self):
+    def load_historical_graph(self):
         # driver to historical database
         _hist_uri = self.cfg.get('src_uri')
         _hist_user = self.cfg.get('src_user')
@@ -44,23 +29,25 @@ class Neo4jExplorer:
             MATCH (n)-[r]->(m)
             RETURN n.name AS n_name, n.id AS n_id, properties(r).weight AS weight, m.name AS m_name, m.id AS m_id
             '''
-        q_create = '''
-            LOAD CSV WITH HEADERS FROM 'file:///2.csv' AS row
-            MERGE (n:Work {id: row.n_id, name: row.n_name})
-            MERGE (m:Work {id: row.m_id, name: row.m_name})
-            CREATE (n)-[r:FOLLOWS {weight: row.weight}]->(m);
+        lnk = self.cfg.get('hist_link')
+        q_create = f'''
+            LOAD CSV WITH HEADERS FROM '{lnk}' AS row
+            MERGE (n:Work {{id: row.n_id, name: row.n_name}})
+            MERGE (m:Work {{id: row.m_id, name: row.m_name}})
+            CREATE (n)-[r:FOLLOWS {{weight: row.weight}}]->(m);
             '''
 
         # obtaining data
         result = _hist_driver.session().run(q_data_obtain).data()
         _hist_driver.close()
 
+        # to do: делать нормальную передачу CSV-файла
         df = pd.DataFrame(result)
         save_path = 'C:\\Users\\Nikita\\.Neo4jDesktop\\relate-data\\dbmss\\dbms-44d5c24b-bb41-4e4b-bbeb-f18bca851f09' \
                     '\\import\\'
-        df.to_csv(save_path + '2.csv', index=False)
+        df.to_csv(save_path + 'data.csv', index=False)
         with self.driver.session() as session:
-            session.run("MATCH (n) DETACH DELETE n")  # Очистка
+            session.run("MATCH (n) DETACH DELETE n")  # Предварительная очистка базы данных
             session.run(q_create)
 
     def removing_node(self, id: str):
@@ -104,53 +91,10 @@ class Neo4jExplorer:
             id_lst.append((i['n']['id']))
         return list(set(id_lst))
 
-    def new_graph(self, target_ids: list):
+    def create_new_graph_algo(self, target_ids: list):
         for element in self.get_all_id():
             if element not in target_ids:
                 self.removing_node(element)
-
-    def create_link(self, tx: Transaction, parent_id, child_id):
-        tx.run("MATCH (parent) WHERE parent.id = $parent_id "
-               "MATCH (child) WHERE child.id = $child_id "
-               "MERGE (parent)-[r]->(child)",
-               parent_id=parent_id,
-               child_id=child_id)
-
-    def remove_link(self, tx: Transaction, parent_id, child_id):
-        tx.run("MATCH (parent) WHERE parent.id = $parent_id "
-               "MATCH (child) WHERE child.id = $child_id "
-               "DELETE (parent)-[r]->(child)",
-               parent_id=parent_id,
-               child_id=child_id)
-
-    def way_exist(self, parent_id, child_id):
-        query = "CALL gds.graph.project('myGraph', 'Node', 'REL')"
-        query = '''MATCH (a:Node{name:'A'}), (b:Node{name:'B'})
-                   WHERE a.id = $parent_id AND b.id = $child_id
-                   WITH id(a) AS source, [id(b)] AS targetNodes
-                   CALL gds.dfs.stream('myGraph', {
-                   sourceNode: source,
-                   targetNodes: targetNodes
-                   })
-                   YIELD path
-                   RETURN path'''
-
-    def triangle_destroyer(self, parent_id, child_id):
-        outcome_data_obtain = f'''
-                            MATCH (n)-[]->(m)
-                            WHERE n.id = $id
-                            RETURN m
-                            '''
-
-        with self.driver.session() as session:
-
-            outcoming = session.run(outcome_data_obtain, id=id).data()
-            outcoming = np.array([row['m']['id'] for row in outcoming])
-
-            for child in outcoming:
-                self.driver.session().write_transaction(self.remove_link, parent_id, child_id)
-                if not self.way_exist(parent_id, child_id):
-                    self.driver.session().write_transaction(self.create_link, parent_id, child_id)
 
     def del_extra_rel(self):
         q_delete = '''
@@ -159,22 +103,24 @@ class Neo4jExplorer:
             '''
         self.driver.session().run(q_delete)
 
-    def ordering(self, schedDF: pd.DataFrame):
+    def add_pred_and_flw(self, data_to_order: pd.DataFrame):
         q_data_obtain = '''
         MATCH (n)-[]->(m)
         RETURN n.id AS n_id, m.id AS m_id
         '''
-        schedDF.drop(['Unnamed: 0'], axis=1, errors='ignore', inplace=True)
-        schedDF = schedDF.astype('str')
-        schedDF['precursors'] = ''
-        schedDF['followers'] = ''
-        wbs2_arr = schedDF.wbs2.unique()
+        data_to_order.drop(['Unnamed: 0'], axis=1, errors='ignore', inplace=True)
+        data_to_order = data_to_order.astype('str')
+        data_to_order['predecessors'] = ''
+        data_to_order['followers'] = ''
+        data_to_order['pred_vend'] = ''
+        data_to_order['fol_vend'] = ''
+        wbs2_arr = data_to_order.wbs2.unique()
 
         for i_wbs2 in wbs2_arr:
-            wbs_df = schedDF[schedDF.wbs2 == i_wbs2]
+            wbs_df = data_to_order[data_to_order.wbs2 == i_wbs2]
             vendors = wbs_df.vendor_code.to_numpy()
-            self.load_data()
-            self.new_graph(vendors)
+            self.load_historical_graph()
+            self.create_new_graph_algo(vendors)
             self.del_extra_rel()
 
             result = self.driver.session().run(q_data_obtain).data()
@@ -183,30 +129,35 @@ class Neo4jExplorer:
                 ind2 = wbs_df.index[wbs_df.vendor_code == vend].tolist()[0]
                 flwDF = df.loc[df.n_id == vend]
                 if not flwDF.empty:
-                    flws = flwDF.m_id.to_numpy()
-                    schedDF.at[ind2, 'followers'] = ', '.join(flws)
+                    flw_vends = flwDF.m_id.to_numpy()
+                    flws = np.array([str(wbs_df.index[wbs_df.vendor_code == i].tolist()[0]) for i in flw_vends])
+                    data_to_order.at[ind2, 'followers'] = ', '.join(flws)
+                    data_to_order.at[ind2, 'fol_vend'] = ', '.join(flw_vends)
 
                 predDF = df.loc[df.m_id == vend]
                 if not predDF.empty:
-                    preds = predDF.n_id.to_numpy()
-                    schedDF.at[ind2, 'precursors'] = ', '.join(preds)
+                    pred_vends = predDF.n_id.to_numpy()
+                    preds = np.array([str(wbs_df.index[wbs_df.vendor_code == i].tolist()[0]) for i in pred_vends])
+                    data_to_order.at[ind2, 'predecessors'] = ', '.join(preds)
+                    data_to_order.at[ind2, 'pred_vend'] = ', '.join(pred_vends)
 
-        return schedDF
+        return data_to_order
 
 
 def main():
-    # starttime = datetime.datetime.now()
-    #
-    # file_path = 'data/solution_schedule.xlsx'
-    # schedDF = pd.read_excel(file_path, sheet_name="Состав работ", dtype=str, index_col=0)
+    starttime = datetime.datetime.now()
+
+    file_path = 'data/solution_schedule.xlsx'
+    workingDF = pd.read_excel(file_path, sheet_name="Состав работ", dtype=str, index_col=0)
 
     app = Neo4jExplorer()
-    # resultDF = app.ordering(schedDF)
+    resultDF = app.add_pred_and_flw(workingDF)
+    print(app.cfg.get('hist_link'))
     app.close()
-    #
-    # with pd.ExcelWriter('data/result.xlsx', engine='openpyxl') as writer:
-    #     resultDF.to_excel(writer, sheet_name="Упорядоченно")
-    # print('data ordered', datetime.datetime.now() - starttime)
+
+    with pd.ExcelWriter('data/result_ordered.xlsx', engine='openpyxl') as writer:
+        resultDF.to_excel(writer, sheet_name="Упорядоченно")
+    print('data ordered', datetime.datetime.now() - starttime)
 
 
 if __name__ == "__main__":

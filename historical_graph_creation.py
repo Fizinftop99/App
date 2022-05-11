@@ -50,10 +50,10 @@ def main():  # Проверяй базу данных atabase=
     data = read_graph_data("data/2021-11-19 Roder связи.xlsx")
     data2 = read_graph_data("data/Родер - КТК.xlsx")
     # driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "2310"))
-    src_uri = "neo4j+s://174cd36c.databases.neo4j.io"
-    src_user = "neo4j"
-    src_pswd = "w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU"
-    driver = GraphDatabase.driver(src_uri, auth=(src_user, src_pswd))
+    uri = "neo4j+s://174cd36c.databases.neo4j.io"
+    user = "neo4j"
+    pswd = "w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU"
+    driver = GraphDatabase.driver(uri, auth=(user, pswd))
     # driver = GraphDatabase.driver("neo4j://20.107.79.39:7687", auth=("neo4j", "Accelerati0n"))
     with driver.session() as session:
         session.write_transaction(clear_database)
