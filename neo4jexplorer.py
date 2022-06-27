@@ -8,11 +8,13 @@ from yml import get_cfg
 class Neo4jExplorer:
     def __init__(self):
         # read settings from config
-        self.cfg: dict = get_cfg("neo4j")
-        _uri = self.cfg.get('uri')
-        _user = self.cfg.get('user')
-        _pass = self.cfg.get('password')
-        self.driver = GraphDatabase.driver(_uri, auth=(_user, _pass))
+        # self.cfg: dict = get_cfg("neo4j")
+        # _uri = self.cfg.get('uri')
+        # _user = self.cfg.get('user')
+        # _pass = self.cfg.get('password')
+        # self.driver = GraphDatabase.driver(_uri, auth=(_user, _pass))
+
+        self.driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "2310"))
 
     def close(self):
         # Don't forget to close the driver connection when you are finished with it
@@ -119,27 +121,27 @@ class Neo4jExplorer:
         for i_wbs2 in wbs2_arr:
             wbs_df = data_to_order[data_to_order.wbs2 == i_wbs2]
             vendors = wbs_df.vendor_code.to_numpy()
-            self.load_historical_graph()
+            # self.load_historical_graph()
             self.create_new_graph_algo(vendors)
             self.del_extra_rel()
-
-            result = self.driver.session().run(q_data_obtain).data()
-            df = pd.DataFrame(result)
-            for vend in vendors:
-                ind2 = wbs_df.index[wbs_df.vendor_code == vend].tolist()[0]
-                flwDF = df.loc[df.n_id == vend]
-                if not flwDF.empty:
-                    flw_vends = flwDF.m_id.to_numpy()
-                    flws = np.array([str(wbs_df.index[wbs_df.vendor_code == i].tolist()[0]) for i in flw_vends])
-                    data_to_order.at[ind2, 'followers'] = ', '.join(flws)
-                    data_to_order.at[ind2, 'fol_vend'] = ', '.join(flw_vends)
-
-                predDF = df.loc[df.m_id == vend]
-                if not predDF.empty:
-                    pred_vends = predDF.n_id.to_numpy()
-                    preds = np.array([str(wbs_df.index[wbs_df.vendor_code == i].tolist()[0]) for i in pred_vends])
-                    data_to_order.at[ind2, 'predecessors'] = ', '.join(preds)
-                    data_to_order.at[ind2, 'pred_vend'] = ', '.join(pred_vends)
+            break
+            # result = self.driver.session().run(q_data_obtain).data()
+            # df = pd.DataFrame(result)
+            # for vend in vendors:
+            #     ind2 = wbs_df.index[wbs_df.vendor_code == vend].tolist()[0]
+            #     flwDF = df.loc[df.n_id == vend]
+            #     if not flwDF.empty:
+            #         flw_vends = flwDF.m_id.to_numpy()
+            #         flws = np.array([str(wbs_df.index[wbs_df.vendor_code == i].tolist()[0]) for i in flw_vends])
+            #         data_to_order.at[ind2, 'followers'] = ', '.join(flws)
+            #         data_to_order.at[ind2, 'fol_vend'] = ', '.join(flw_vends)
+            #
+            #     predDF = df.loc[df.m_id == vend]
+            #     if not predDF.empty:
+            #         pred_vends = predDF.n_id.to_numpy()
+            #         preds = np.array([str(wbs_df.index[wbs_df.vendor_code == i].tolist()[0]) for i in pred_vends])
+            #         data_to_order.at[ind2, 'predecessors'] = ', '.join(preds)
+            #         data_to_order.at[ind2, 'pred_vend'] = ', '.join(pred_vends)
 
         return data_to_order
 
@@ -152,11 +154,12 @@ def main():
 
     app = Neo4jExplorer()
     resultDF = app.add_pred_and_flw(workingDF)
-    print(app.cfg.get('hist_link'))
+    # print(app.cfg.get('hist_link'))
+    # app.create_new_graph_algo(['101316', '131723', '118192', '100295', '165160'])
     app.close()
 
-    with pd.ExcelWriter('data/result_ordered.xlsx', engine='openpyxl') as writer:
-        resultDF.to_excel(writer, sheet_name="Упорядоченно")
+    # with pd.ExcelWriter('data/result_ordered.xlsx', engine='openpyxl') as writer:
+    #     resultDF.to_excel(writer, sheet_name="Упорядоченно")
     print('data ordered', datetime.datetime.now() - starttime)
 
 

@@ -2,13 +2,14 @@ from neo4j import GraphDatabase, Transaction
 import pandas as pd
 
 
+URI = "neo4j+s://174cd36c.databases.neo4j.io"
+USER_NAME = "neo4j"
+PASSWD = "w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU"
+
+
 def read_graph_data(file_name: str) -> pd.DataFrame:
     target_cols = ['Идентификатор операции', 'Артикул', 'Название операции', 'Последователи']
     df = pd.read_excel(file_name, dtype=str)
-    exist_cols = df.columns.values.tolist()
-    if 'ADCM_П/п' in exist_cols:
-        df.rename(columns={'ADCM_П/п': 'Артикул'}, inplace=True)
-
     df = df[target_cols]
     df = df.loc[df['Артикул'].notna()]
     df.loc[:, 'Идентификатор операции'] = df['Идентификатор операции'].apply(str.strip)
@@ -46,21 +47,29 @@ def clear_database(tx: Transaction):
            "DETACH DELETE n")
 
 
-def main():  # Проверяй базу данных atabase=
-    data = read_graph_data("data/2021-11-19 Roder связи.xlsx")
-    data2 = read_graph_data("data/Родер - КТК.xlsx")
-    # driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "2310"))
-    uri = "neo4j+s://174cd36c.databases.neo4j.io"
-    user = "neo4j"
-    pswd = "w21V4bw-6kTp9hceHMbnlt5L9X1M4upuuq2nD7tD_xU"
-    driver = GraphDatabase.driver(uri, auth=(user, pswd))
-    # driver = GraphDatabase.driver("neo4j://20.107.79.39:7687", auth=("neo4j", "Accelerati0n"))
+def main():
+    # data_file_paths = ["data/2021-11-19 Roder связи.xlsx", "data/Родер - КТК.xlsx"]
+    data_file_paths = ["data/Родер - КТК.xlsx"]
+    # data_file_paths = ["data/2021-11-19 Roder связи.xlsx"]
+    # driver = GraphDatabase.driver(URI, auth=(USER_NAME, PASSWD))
+    driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "2310"))
+
     with driver.session() as session:
         session.write_transaction(clear_database)
-        session.write_transaction(make_graph, data)
-        session.write_transaction(make_graph, data2)
+        for i in data_file_paths:
+            data = read_graph_data(i)
+            session.write_transaction(make_graph, data)
     driver.close()
 
 
 if __name__ == "__main__":
     main()
+
+
+# driver = GraphDatabase.driver("neo4j://20.107.79.39:7687", auth=("neo4j", "Accelerati0n"))
+# driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "2310"))
+
+# exist_cols = df.columns.values.tolist()
+# if 'ADCM_П/п' in exist_cols:
+#     df.rename(columns={'ADCM_П/п': 'Артикул'}, inplace=True)
+
